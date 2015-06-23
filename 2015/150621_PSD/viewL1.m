@@ -37,7 +37,23 @@ histfit(strain_to_plot, 50)
 xlabel('strain')
 title('Histogram for Strain v. Time Data')
 
-%% Calculate and plot a PSD
+
+%% Try a different method of making the PSDs by adding arguments to pwelch
+fs = 4096; % Hz - sampling frequency
+tfft = 2; % FFT segment length - !!! I randomly chose a number
+nfft = tfft*fs;
+win = hann(nfft);
+noverlap = nfft/2;
+
+[psd_h, freq] = pwelch(strain_to_plot, win, noverlap, nfft, fs);
+loglog(freq, sqrt(psd_h))
+xlabel('Frequency (Hz)')
+ylabel('Amplitude Spectral Density (strain/Sqrt[Hz])')
+title('Sensitivity for L1 for 1 hour at GPS start time 842657792');
+%axis([10 10000 0 inf]);
+
+%% Make 100 PSDs to compare statistics at different frequency values
+% !! - this section is under construction
 
 % Split time series into num_segments number of evenly spaced chunks
 num_segments = 1;
@@ -61,6 +77,8 @@ title('PSDs for Equally Spaced Frequency Segments');
 axis([10 10000 0 inf]);
 
 
+
+
 %% Plot Gaussian for one frequency chunk
 
 % Select one frequency
@@ -74,4 +92,6 @@ histfit(psd_values, 20)
 title('PSDs at 1064Hz')
 xlabel('Not sure what this axis is either')
 
+
+%% Plug in sine wave to PSD and see what happens
 
