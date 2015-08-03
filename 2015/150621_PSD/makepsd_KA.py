@@ -186,6 +186,7 @@ print "* Chunk length ", chunk_length_sec, " = ", chunk_length, "saples"
 
 #i_chunk = 2;
 for i_chunk in range(0,10):
+
      print "* Chunk #", i_chunk
      strain_chunk = strain[seglist[i_seg]][chunk_length*i_chunk:chunk_length*(i_chunk+1)]
      time_chunk   =   time[seglist[i_seg]][chunk_length*i_chunk:chunk_length*(i_chunk+1)]
@@ -198,7 +199,8 @@ for i_chunk in range(0,10):
 
 ########
 # Calculate a PSD
-     print "=== Caluculating the power spectral density for the chunk ==="
+
+     # print "=== Caluculating the power spectral density for the chunk ==="
 
      # Choose one from the following windows
      # my_window = mlab.window_none(np.ones(chunk_length)))
@@ -223,3 +225,4 @@ for i_chunk in range(0,10):
      print '  RMS (frequency domain):              ', rms_psd,         'Unit: strain_rms'
      print '  RMS (time domain with window comp.): ', rms/window_comp, 'Unit: strain_rms'
      print "  These two have to agree."
+     print "" # blank
