@@ -97,7 +97,7 @@ def plot_timeseries(time_seg, strain_seg):
 	#plt.savefig('timeseries.pdf')
 
 
-def plot_psd(time_seg, strain_seg, fs, plotting=True):
+def plot_psd(time_seg, strain_seg, fs, chunk_length, window, plotting=True):
 	
 	"""
 	Creates a power spectral density plot for a set of strain values
@@ -107,14 +107,17 @@ def plot_psd(time_seg, strain_seg, fs, plotting=True):
 
 	NFFT is set to the sampling frequency. 
 
-	Overlap is half of NFFT.	
-	
 	time_seg -- a list of time values
 
 	strain_seg -- a list of strain values corresponding to time values 
 	in the same index of time_seg; same length as time_seg
 
 	fs -- sampling frequency of data in Hz
+
+	chunk_length -- the number of samples; timespan of segment multiplied
+	by the sampling frequency
+
+	window -- selected window for psd calculation; typically hanning
 
 	plotting -- Boolean; if true plots are produced
 	
@@ -125,7 +128,9 @@ def plot_psd(time_seg, strain_seg, fs, plotting=True):
 
 	"""
 
-	pxx, freqs = mlab.psd(strain_seg, Fs=fs, NFFT=fs, noverlap=fs/2)
+	pxx, freqs = mlab.psd(
+			      strain_seg, Fs=fs, NFFT=chunk_length, 
+			      window=window)
 	if plotting:
 		plt.figure(2)	
 		plt.loglog(freqs, np.sqrt(pxx))
@@ -140,30 +145,92 @@ def plot_psd(time_seg, strain_seg, fs, plotting=True):
 
 
 # Read in data
-strain, time, channel_dictionary = rl.loaddata('L-L1_LOSC_4_V1-842657792-4096.hdf5')
+fname = 'L-L1_LOSC_4_V1-842657792-4096.hdf5'
+print '=== Start reading data ==='
+print '* File name: ', fname
+strain, time, channel_dictionary = rl.loaddata(fname)
+
+data_len = len(time)
 time_spacing = time[1] - time[0]
 fs = int(1/time_spacing)
 
+print '* Number of samples: ', data_len, ' = 2^', np.log2(data_len)
+print '* Start GPS Time: ', time[0]
+print '* End GPS Time: ', time[data_len - 1]
+print '* Sampling Time: ', time_spacing, 'sec => ', fs, ' Hz'
+print ''  # blank line
+
 # Select a data segment without errors ("good data")
+print '=== DQ good segments ==='
 seglist = rl.dq_channel_to_seglist(channel_dictionary['DEFAULT'], fs)
-length = 16  # s
-strain_seg = strain[seglist[0]][:(length * fs)]
-time_seg = time[seglist[0]][:(length * fs)]
+num_seg = len(seglist)
+print "* Number of uninterrupted 'good' segments: ", num_seg
 
-# Plot a time series
-#plot_timeseries(time_seg, strain_seg)
+seg_index = 0  # Select which good time segment to use
+print '* Use segment #', seg_index
+time_seg = time[seglist[seg_index]]
+time_seg_min = min(time_seg)
+time_seg_max = max(time_seg)
+time_len = time_seg_max - time_seg_min
+print '* Length of segment ', time_len, 'sec => ', time_len * fs, ' samples'
+print ''
 
-# Calculate a PSD
-pxx, freqs = plot_psd(time_seg, strain_seg, fs, True)
+# Extract a chunk of data from the selected segment
+print '=== Extracting a chunk of data from selected segment ==='
+chunk_length_sec = 16  # s
+chunk_length = chunk_length_sec * fs  # number of samples
+print '* Chunk length: ', chunk_length_sec, 'sec => ', chunk_length, 'samples'
 
-# Check the PSD through Parseval's Theorem
-total_power = np.sum(pxx * (freqs[1] - freqs[0])) # Integrate PSD over all freqs
-rms = np.sqrt(np.mean(np.fabs(strain_seg)**2))
-print "\nConfirm PSD calculation with Parseval's Theorem"
-print 'variance: ', rms**2
-print 'total power: ', total_power, '\n'
+# Calculate PSD and confirm Parseval's Theorem for many data chunks
+for chunk_index in range(10):
+
+	print '* Chunk #', chunk_index
+	strain_chunk = strain[seglist[seg_index]][
+		chunk_length*chunk_index:chunk_length*(chunk_index+1)]
+	time_chunk = time[seglist[seg_index]][
+		chunk_length*chunk_index:chunk_length*(chunk_index+1)]
+
+	print '* Extracted chunk length: ', len(time_chunk)
+	print ''  # blank line
+
+	# Plot a time series
+	#plot_timeseries(time_seg, strain_seg)
+
+	# Calculate a PSD
+	my_window = mlab.window_hanning(np.ones(chunk_length))
+	#pxx, freqs = mlab.psd(strain_chunk, Fs=fs, NFFT=chunk_length, 
+			      #window=my_window)
+	pxx, freqs = plot_psd(time_chunk, strain_chunk, fs, chunk_length, 
+			      my_window, False)
+	
+	f_resolution = freqs[1] - freqs[0]
+	print '* Frequency resolution returned by mlab.psd: ', f_resolution,'Hz'
+	print '  1/(chunk_length_sec): ', 1/chunk_length_sec, 'Hz'
+	print '  This must agree'
+	print ''  # blank line
+
+
+	# Check the PSD through Parseval's Theorem
+	rms_psd = np.sqrt(np.sum(pxx * f_resolution)) # Integrate PSD over all freqs
+	rms = np.sqrt(np.mean(np.fabs(strain_chunk*my_window)**2)) # RMS of timeseries
+	window_comp = np.sqrt(np.mean(my_window**2))  # Window compensation factor (in amplitude)
+	print "* Confirm PSD calculation with Parseval's Theorem"
+	print '  RMS (frequency domain): ', rms_psd, 'Unit: strain_rms'
+	print '  RMS (time domain with window comp.: ', rms/window_comp, 'Unit: strain_rms'
+	print '  This must agree'
+	print ''
+
 
 # Plot several PSDs to compare statistics on each PSD
+print '=== Calculating PSDs for smaller segments ==='
+print "* Use 'good data segment #", seg_index
+for seg_power2 in range(1,7):
+	print '* Number of segments: ', 2**seg_power2
+	
+	
+################## Beyond this point I need to still edit the code
+
+
 
 # Select data length based on closest power of two which will give 
 # approximately the desired number of segments
@@ -212,6 +279,8 @@ plt.title('Several PSDs for L1 data starting at GPS ' + str(time_seg[0]))
 plt.ylim([1e-26, 1e-16])
 #plt.savefig('manyPSDs.pdf')
 
+
+'''
 # Plot PSD statistics for every frequency in range
 many_mean = []
 many_std = []
@@ -245,7 +314,7 @@ plt.savefig('psd_statistics.pdf')
 # Display histogram for a chosen frequency (in Hz as first parameter)
 plot_histogram(500, psds)
 print get_freq_statistics(freq, psds)
-	
+'''	
 
 plt.show()
 
