@@ -107,6 +107,8 @@ def plot_psd(time_seg, strain_seg, fs, chunk_length, window, plotting=True):
 
 	NFFT is set to the sampling frequency. 
 
+	Overlap is half of NFFT.
+
 	time_seg -- a list of time values
 
 	strain_seg -- a list of strain values corresponding to time values 
@@ -130,7 +132,7 @@ def plot_psd(time_seg, strain_seg, fs, chunk_length, window, plotting=True):
 
 	pxx, freqs = mlab.psd(
 			      strain_seg, Fs=fs, NFFT=chunk_length, 
-			      window=window)
+			      noverlap=chunk_length/2, window=window)
 	if plotting:
 		plt.figure(2)	
 		plt.loglog(freqs, np.sqrt(pxx))
@@ -199,7 +201,7 @@ for chunk_index in range(10):
 	# Calculate a PSD
 	my_window = mlab.window_hanning(np.ones(chunk_length))
 	#pxx, freqs = mlab.psd(strain_chunk, Fs=fs, NFFT=chunk_length, 
-			      #window=my_window)
+			      #noverlap=chunk_length/2, window=my_window)
 	pxx, freqs = plot_psd(time_chunk, strain_chunk, fs, chunk_length, 
 			      my_window, False)
 	
