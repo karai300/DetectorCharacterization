@@ -182,7 +182,7 @@ print "" # blank line
 print "=== Extracting a chunk of data from the selected segment ==="
 chunk_length_sec = 16  # sec
 chunk_length     = chunk_length_sec*fs # number of samples
-print "* Chunk length ", chunk_length_sec, " = ", chunk_length, "saples"
+print "* Chunk length ", chunk_length_sec, " = ", chunk_length, "samples"
 
 #i_chunk = 2;
 for i_chunk in range(0,10):
@@ -197,8 +197,8 @@ for i_chunk in range(0,10):
      # Plot a time series
      # plot_timeseries(time_chunk, strain_chunk)
 
-########
-# Calculate a PSD
+     ########
+     # Calculate a PSD
 
      # print "=== Caluculating the power spectral density for the chunk ==="
 
@@ -212,7 +212,7 @@ for i_chunk in range(0,10):
      f_resolution = freqs[1]-freqs[0]
      print "* Frequency resolution returned by mlab.psd:     ", f_resolution
      print "  1/(chunk_length_sec):                          ", 1/chunk_length_sec
-     print "  These two have to agree."
+     print "  This must agree."
      print "" # blank
 
      # Check the PSD through Parseval's Theorem
@@ -224,5 +224,51 @@ for i_chunk in range(0,10):
      print "* Confirm PSD calculation with Parseval's Theorem"
      print '  RMS (frequency domain):              ', rms_psd,         'Unit: strain_rms'
      print '  RMS (time domain with window comp.): ', rms/window_comp, 'Unit: strain_rms'
-     print "  These two have to agree."
+     print "  This must agree."
      print "" # blank
+
+########
+
+print "=== PSD statistic ==="
+
+i_seg = 0;
+print "* Use segment #", i_seg
+time_seg = time[seglist[0]]
+time_seg_max = max(time_seg)
+time_seg_min = min(time_seg)
+segment_length = (time_seg_max - time_seg_min)*fs
+print "* Length of the segment: ", time_seg_max - time_seg_min, "sec =", segment_length, "samples"
+print "" # blank line
+
+chunk_length     = 2**12            # number of samples in a chunk
+chunk_length_sec = float(2**12)/fs  # chunk length in sec
+print "* Length of one chunk: ", chunk_length_sec, " sec = ", chunk_length, "samples"
+
+n_chunk_request = 6000
+print "* The requested number of chunks:", n_chunk_request
+
+# Q: what would be the total length of the data?
+#    (note: there is a 1/2 chunk overlap)
+analyze_length = chunk_length/2*(n_chunk_request+1)
+
+if analyze_length > (time_seg_max - time_seg_min)*fs:
+	print "  The requested data length exceeds the length of the segment."
+	n_chunk_request = int((segment_length/(chunk_length/2)-1))
+	print "* Reduced the requested number of chunks:", n_chunk_request
+
+print "" # blank
+
+import sys
+import time
+for i_PSD in range(0,n_chunk_request):
+	sys.stderr.write('\r\033[K'+'Processing chunk #: '+str(i_PSD)+"/"+str(n_chunk_request-1))
+
+	#if np.mod(i_PSD,100)==0:
+	#	sys.stderr.write('\r\033[K'+'Processing chunk #: '+str(i_PSD)+"/"+str(n_chunk_request-1))
+
+	# here is your psd code
+        # .....
+	time.sleep(0.001) # this is just for a demostration and should be removed, of course
+		
+print "" # new line
+print "Processing all chunks finished"
