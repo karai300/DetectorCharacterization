@@ -224,16 +224,49 @@ for chunk_index in range(10):
 
 
 # Plot several PSDs to compare statistics on each PSD
+plt.figure(3)
+psds = []
 print '=== Calculating PSDs for smaller segments ==='
 print "* Use 'good data segment #", seg_index
+strain_seg = strain[seglist[seg_index]]
+len_seg = len(strain[seglist[seg_index]])
+num_PSDs = 0
 for seg_power2 in range(1,7):
-	print '* Number of segments: ', 2**seg_power2
+	num_chunks = 2**seg_power2
 	
+	# Check that segment is of sufficient length
+	if len_seg < num_chunks:
+		num_chunks = len_seg
+		print '* Maximum number of chunks reduced to length of segment'
 	
-################## Beyond this point I need to still edit the code
+	print '* Number of chunks: ', num_chunks
+	
+	# Define NFFT based on number of segments
+	if num_chunks < 32:
+		nfft = 4096
+	else:
+		nfft = 2048
+	print '* NFFT: ', nfft
+	
+	# Divide segment into chunks and calculate PSD for each
+	chunk_indices, step = np.linspace(
+		0, len_seg, num_chunks, endpoint=False, retstep=True)
+	for chunk_index in chunk_indices:
+		pxx, freqs = mlab.psd(
+			strain_seg[int(chunk_index):int(chunk_index + step)], 
+			Fs=fs, NFFT=nfft, noverlap=nfft/2)
+		plt.loglog(freqs, np.sqrt(np.abs(pxx)))		
+		num_PSDs += 1
+	
+	# Store list of tuples for PSD values
+	psds.append((freqs, np.sqrt(pxx)))
+	
+	print ''
+
+print '* Number of PSDs plotted: ', num_PSDs 
 
 
-
+'''
 # Select data length based on closest power of two which will give 
 # approximately the desired number of segments
 num_segments = 63
@@ -273,7 +306,7 @@ while (max_index + seg_length) < len(strain_seg):
 
 	# Store list of tuples for PSD values
 	psds.append((freqs, np.sqrt(pxx)))
-
+'''
 plt.grid('on')
 plt.xlabel('Frequency (Hz)')
 plt.ylabel('PSD (strain /  Sqrt(Hz))')
@@ -282,7 +315,7 @@ plt.ylim([1e-26, 1e-16])
 #plt.savefig('manyPSDs.pdf')
 
 
-'''
+
 # Plot PSD statistics for every frequency in range
 many_mean = []
 many_std = []
@@ -316,7 +349,7 @@ plt.savefig('psd_statistics.pdf')
 # Display histogram for a chosen frequency (in Hz as first parameter)
 plot_histogram(500, psds)
 print get_freq_statistics(freq, psds)
-'''	
+	
 
 plt.show()
 
