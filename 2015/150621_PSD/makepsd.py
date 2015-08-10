@@ -74,7 +74,7 @@ def plot_histogram(freq_selected, psds):
 	plt.hist(psd_h, 20)
 	plt.xlabel('PSD (strain / (Sqrt(Hz))')
 	plt.ylabel('Count')
-	plt.savefig('histogram.pdf')
+	#plt.savefig('histogram.pdf')
 	
 
 def plot_timeseries(time_seg, strain_seg):
@@ -222,12 +222,58 @@ for chunk_index in range(10):
 	print '  This must agree'
 	print ''
 
+print '=== PSD statistics ==='
+seg_index = 0
+print '* Use segment #', seg_index
+time_seg = time[seglist[seg_index]]
+time_seg_max = max(time_seg)
+time_seg_min = min(time_seg)
+segment_length = int((time_seg_max - time_seg_min) * fs)  # number of samples
+print '* Length of the segment: ', time_seg_max - time_seg_min, 'sec =>', segment_length, ' samples'
 
+chunk_length = 2**12  # number of samples in a chunk
+chunk_length_sec = chunk_length / fs # chunk length in seconds
+print '* Length of one chunk: ', chunk_length_sec, ' sec => ', chunk_length, ' samples'
+
+# User selects desired number of chunks
+n_chunk_request = 100
+print '* Requested number of chunks: ', n_chunk_request 
+
+# Check that segment is of sufficient length
+analyze_length = (chunk_length/2) * (n_chunk_request + 1)
+if analyze_length > segment_length:
+	print '  The requested data length exceeds the length of the segment.'
+	n_chunk_request = int(segment_length/(chunk_length/2) - 1) 
+	print '  Reduced the requested number of chunks: ', n_chunk_request
+print ''  # blank line
+
+# Calculate PSDs for each chunk
+num_PSDs = 0
+psds = []
+strain_seg = strain[seglist[seg_index]]
+my_window = mlab.window_hanning(np.ones(chunk_length))
+chunk_indices, step = np.linspace(
+	0, segment_length, n_chunk_request, endpoint=False, retstep=True)
+for chunk_index in chunk_indices:
+	pxx, freqs = mlab.psd(
+		strain_seg[int(chunk_index):int(chunk_index + step)], Fs=fs, 
+		NFFT=chunk_length, noverlap=chunk_length/2, window=my_window)
+	plt.loglog(freqs, np.sqrt(np.abs(pxx)))		
+	num_PSDs += 1
+	
+	# Store list of tuples for PSD values
+	psds.append((freqs, np.sqrt(pxx)))
+print '* Finished processing all chunks'	
+print '* Number of PSDs plotted: ', num_PSDs 
+
+
+
+'''
 # Plot several PSDs to compare statistics on each PSD
 plt.figure(3)
 psds = []
 print '=== Calculating PSDs for smaller segments ==='
-print "* Use 'good data segment #", seg_index
+print "* Use 'good' data segment #", seg_index
 strain_seg = strain[seglist[seg_index]]
 len_seg = len(strain[seglist[seg_index]])
 num_PSDs = 0
@@ -266,7 +312,7 @@ for seg_power2 in range(1,7):
 print '* Number of PSDs plotted: ', num_PSDs 
 
 
-'''
+
 # Select data length based on closest power of two which will give 
 # approximately the desired number of segments
 num_segments = 63
@@ -310,9 +356,10 @@ while (max_index + seg_length) < len(strain_seg):
 plt.grid('on')
 plt.xlabel('Frequency (Hz)')
 plt.ylabel('PSD (strain /  Sqrt(Hz))')
-plt.title('Several PSDs for L1 data starting at GPS ' + str(time_seg[0]))
+plt.title(
+	str(num_PSDs) + ' PSDs for L1 data starting at GPS ' + str(time_seg[0]))
 plt.ylim([1e-26, 1e-16])
-#plt.savefig('manyPSDs.pdf')
+plt.savefig('manyPSDs.pdf')
 
 
 
@@ -342,9 +389,9 @@ plt.grid('on')
 #plt.legend([mean, std4, std2], ['Mean', '4 std', '2std'])
 plt.xlabel('Frequency (Hz)')
 plt.ylabel('PSD (strain / Sqrt(Hz))')
-plt.title('Average of several PSDs for L1 data starting at GPS ' + str(time_seg[0])) 
+plt.title('Average of ' + str(num_PSDs) + ' PSDs for L1 data starting at GPS ' + str(time_seg[0])) 
 plt.ylim([1e-26, 1e-16])
-plt.savefig('psd_statistics.pdf')
+#plt.savefig('psd_statistics.pdf')
 
 # Display histogram for a chosen frequency (in Hz as first parameter)
 plot_histogram(500, psds)
