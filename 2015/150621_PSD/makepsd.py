@@ -58,6 +58,8 @@ def plot_histogram(freq_selected, psds):
 
 	psds -- a list of tuples, with one tuple representing the frequency
 	and strain / sqrt(Hz) values for one PSD
+
+	binwidth -- desired width in PSD value of one histogram bin
 	"""
 
 	# Store psd_h for selected frequency in each PSD
@@ -69,12 +71,15 @@ def plot_histogram(freq_selected, psds):
 			if freq == freq_selected:
 				psd_h.append(psd[1][index])
 
+	
 	# Plot histogram
-	plt.figure(5)
-	plt.hist(psd_h, 20)
+	#plt.figure(5)
+	#bins = np.arange(min(psd_h), max(psd_h) + binwidth, binwidth)
+	plt.hist(psd_h, 50, label=str(freq_selected) + 'Hz')
 	plt.xlabel('PSD (strain / (Sqrt(Hz))')
 	plt.ylabel('Count')
-	#plt.savefig('histogram.pdf')
+	plt.legend()
+	plt.savefig('histogram' + str(freq_selected) + '.pdf')
 	
 
 def plot_timeseries(time_seg, strain_seg):
@@ -236,7 +241,7 @@ chunk_length_sec = chunk_length / fs # chunk length in seconds
 print '* Length of one chunk: ', chunk_length_sec, ' sec => ', chunk_length, ' samples'
 
 # User selects desired number of chunks
-n_chunk_request = 100
+n_chunk_request = 200
 print '* Requested number of chunks: ', n_chunk_request 
 
 # Check that segment is of sufficient length
@@ -248,111 +253,26 @@ if analyze_length > segment_length:
 print ''  # blank line
 
 # Calculate PSDs for each chunk
+plt.figure(4)
 num_PSDs = 0
 psds = []
 strain_seg = strain[seglist[seg_index]]
 my_window = mlab.window_hanning(np.ones(chunk_length))
-chunk_indices, step = np.linspace(
-	0, segment_length, n_chunk_request, endpoint=False, retstep=True)
-for chunk_index in chunk_indices:
+for i_PSD in range(n_chunk_request + 1):
+	i_start = int(i_PSD * (chunk_length/2))
+	i_end = int(i_start + chunk_length - 1)
 	pxx, freqs = mlab.psd(
-		strain_seg[int(chunk_index):int(chunk_index + step)], Fs=fs, 
-		NFFT=chunk_length, noverlap=chunk_length/2, window=my_window)
-	plt.loglog(freqs, np.sqrt(np.abs(pxx)))		
+		strain_seg[i_start:i_end], Fs=fs, NFFT=chunk_length, 
+		noverlap=chunk_length/2, window=my_window)
+	plt.loglog(freqs, np.sqrt(np.fabs(pxx)))		
 	num_PSDs += 1
 	
 	# Store list of tuples for PSD values
-	psds.append((freqs, np.sqrt(pxx)))
+	psds.append((freqs, np.fabs(pxx)))
 print '* Finished processing all chunks'	
 print '* Number of PSDs plotted: ', num_PSDs 
 
 
-
-'''
-# Plot several PSDs to compare statistics on each PSD
-plt.figure(3)
-psds = []
-print '=== Calculating PSDs for smaller segments ==='
-print "* Use 'good' data segment #", seg_index
-strain_seg = strain[seglist[seg_index]]
-len_seg = len(strain[seglist[seg_index]])
-num_PSDs = 0
-for seg_power2 in range(1,7):
-	num_chunks = 2**seg_power2
-	
-	# Check that segment is of sufficient length
-	if len_seg < num_chunks:
-		num_chunks = len_seg
-		print '* Maximum number of chunks reduced to length of segment'
-	
-	print '* Number of chunks: ', num_chunks
-	
-	# Define NFFT based on number of segments
-	if num_chunks < 32:
-		nfft = 4096
-	else:
-		nfft = 2048
-	print '* NFFT: ', nfft
-	
-	# Divide segment into chunks and calculate PSD for each
-	chunk_indices, step = np.linspace(
-		0, len_seg, num_chunks, endpoint=False, retstep=True)
-	for chunk_index in chunk_indices:
-		pxx, freqs = mlab.psd(
-			strain_seg[int(chunk_index):int(chunk_index + step)], 
-			Fs=fs, NFFT=nfft, noverlap=nfft/2)
-		plt.loglog(freqs, np.sqrt(np.abs(pxx)))		
-		num_PSDs += 1
-	
-	# Store list of tuples for PSD values
-	psds.append((freqs, np.sqrt(pxx)))
-	
-	print ''
-
-print '* Number of PSDs plotted: ', num_PSDs 
-
-
-
-# Select data length based on closest power of two which will give 
-# approximately the desired number of segments
-num_segments = 63
-approx_seg_length = len(strain_seg) / num_segments
-seg_length = int(pow(2, np.ceil(np.log(approx_seg_length)/np.log(2))))
-print 'seg length: ', seg_length
-print 'strain length: ', len(strain_seg)
-
-# !!! - Change NFFT based on number of segments. 
-if num_segments <= 20:
-	nfft = int(seg_length / 2)
-	pad = nfft * 4
-else:
-	nfft = int(seg_length)
-	pad = nfft * 2
-	
-#nfft = 4096
-print 'nfft: ', nfft
-# 4096 works for 1 seg, 10 segs, 20 segs
-# 2048 looks ok for 20 segs but not great
-# 2048 looks pretty good for 50 segs
-
-psds = []
-plt.figure(3)
-max_index = -1
-while (max_index + seg_length) < len(strain_seg):
-	# Define indices for frequency chunks
-	# !!! - I haven't used a while loop in ages, and this feels weird
-	min_index = max_index + 1
-	max_index = min_index + seg_length - 1
-
-	# Calculate each PSD
-	pxx, freqs = mlab.psd(
-		strain_seg[min_index:max_index], Fs=fs, NFFT=nfft, 
-		noverlap=nfft/2, pad_to=pad)
-	plt.loglog(freqs, np.sqrt(np.abs(pxx)))
-
-	# Store list of tuples for PSD values
-	psds.append((freqs, np.sqrt(pxx)))
-'''
 plt.grid('on')
 plt.xlabel('Frequency (Hz)')
 plt.ylabel('PSD (strain /  Sqrt(Hz))')
@@ -362,7 +282,17 @@ plt.ylim([1e-26, 1e-16])
 plt.savefig('manyPSDs.pdf')
 
 
+# Calculate histograms for PSD distribution for many PSDs at different freqs
+plt.figure(5)
+binwidth = 1e-46
+plot_histogram(100, psds)
+plt.figure(6)
+plot_histogram(500, psds)
+plt.figure(7)
+plot_histogram(1000, psds)
 
+	
+'''
 # Plot PSD statistics for every frequency in range
 many_mean = []
 many_std = []
@@ -396,7 +326,7 @@ plt.ylim([1e-26, 1e-16])
 # Display histogram for a chosen frequency (in Hz as first parameter)
 plot_histogram(500, psds)
 print get_freq_statistics(freq, psds)
-	
+'''	
 
 plt.show()
 
