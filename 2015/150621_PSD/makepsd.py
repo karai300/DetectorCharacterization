@@ -7,48 +7,6 @@ import matplotlib.mlab as mlab
 import readligo as rl
 
 
-def get_freq_statistics(freq_selected, psds):
-
-        """
-        Explore statistics for distribution of all PSDs at one frequency bin
-
-        Given a set of PSDs computed from several frequency chunks of the 
-        same data set, the spread of strain / sqrt(Hz) values are compared 
-        for all PSDs at a selected frequency. Mean, variance, skewness, and
-	kurtosis are returned.
-        
-        freq_selected --  a frequency in Hz at which the PSDs will be compared
-
-        psds -- a list of tuples, with one tuple representing the frequency
-        and strain / sqrt(Hz) values for one PSD
-
-        mean -- average of the strain / sqrt(Hz) a.k.a. psd_h values at 
-        the selected frequency
-
-        var -- variance of the aforementioned values
-
-	skew -- third order statistics
-
-	kurt -- fourth order statistics
-        """
-
-        # Store psd_h for selected frequncy in each PSD
-        psd_h = []
-
-        # Find corresponding PSD value for selected frequency
-        for psd in psds:
-                for index, freq in enumerate(psd[0]):
-                        if freq == freq_selected:
-                                psd_h.append(psd[1][index])
-                                # !!! - awkward to have list of arrays
-
-
-        # Calculate moments of power for corresponding psd_h
-	n, min_max, mean, var, skew, kurt = stats.describe(psd_h)       
- 
-	return mean, var, skew, kurt
-
-
 def plot_histogram(freq_selected, psds):
 	
 	"""
@@ -56,30 +14,22 @@ def plot_histogram(freq_selected, psds):
 
 	freq_selected -- selected frequency in Hz
 
-	psds -- a list of tuples, with one tuple representing the frequency
-	and strain / sqrt(Hz) values for one PSD
+	psds -- a dictionary with frequency values as the key and a list of PSD
+	values as the corresponding dictionary value 
 
-	binwidth -- desired width in PSD value of one histogram bin
 	"""
 
 	# Store psd_h for selected frequency in each PSD
-	psd_h = []	
-
-	# Find corresponding PSD value for each selected frequency
-	for psd in psds:
-		for index, freq in enumerate(psd[0]):
-			if freq == freq_selected:
-				psd_h.append(psd[1][index])
-
+	psd_h = psds[freq_selected]	
 	
 	# Plot histogram
 	#plt.figure(5)
 	#bins = np.arange(min(psd_h), max(psd_h) + binwidth, binwidth)
 	plt.hist(psd_h, 50, label=str(freq_selected) + 'Hz')
-	plt.xlabel('PSD (strain / (Sqrt(Hz))')
+	plt.xlabel('PSD (strain^2 / Hz)')
 	plt.ylabel('Count')
 	plt.legend()
-	plt.savefig('histogram' + str(freq_selected) + '.pdf')
+	#plt.savefig('histogram' + str(freq_selected) + '.png')
 	
 
 def plot_timeseries(time_seg, strain_seg):
@@ -100,9 +50,113 @@ def plot_timeseries(time_seg, strain_seg):
 	plt.ylabel('Strain')
 	plt.title('Time Series')
 	#plt.savefig('timeseries.pdf')
+	
 
 
-def plot_psd(time_seg, strain_seg, fs, chunk_length, window, plotting=True):
+def plot_many_psds(
+	seglist, seg_index, time, strain, fs, n_chunk, plotting=False):
+
+	"""
+	Calculate n_chunk PSDs for a given data segment.
+
+	If n_chunk is too large for the segment, it will be reduced to the 
+	maximum allowable value.
+
+	seglist -- a list of segments of strain data without errors
+
+	seg_index -- an index indicating which strain segment is used
+
+	time -- array of all time values
+
+	strain -- array of all strian values, corresponding to the time values
+
+	fs -- sampling frequency in Hz
+
+	n_chunk -- number of requested chunks to divide the timeseries into and
+	calculate a PSD for
+	
+	plotting -- Boolean; if true plots are produced
+
+	Returns:
+
+	psds_dict -- a dictionary with a key of frequency and a value of a
+	list of all associated PSD values 
+	"""
+
+	print '=== PSD statistics ==='
+	print '* Use segment #', seg_index
+	time_seg = time[seglist[seg_index]]
+	time_seg_max = max(time_seg)
+	time_seg_min = min(time_seg)
+	segment_length = int((time_seg_max - time_seg_min) * fs)  # num samples
+	print '* Length of the segment: ', time_seg_max - time_seg_min, 'sec =>', segment_length, ' samples'
+
+	chunk_length = 2**12  # number of samples in a chunk
+	chunk_length_sec = chunk_length / fs # chunk length in seconds
+	print '* Length of one chunk: ', chunk_length_sec, ' sec => ', chunk_length, ' samples'
+
+	# User selects desired number of chunks
+	print '* Requested number of chunks: ', n_chunk 
+
+	# Check that segment is of sufficient length
+	analyze_length = (chunk_length/2) * (n_chunk + 1)
+	if analyze_length > segment_length:
+		print '  The requested data length exceeds the length of the segment.'
+		n_chunk = int(segment_length/(chunk_length/2) - 1) 
+		print '  Reduced the requested number of chunks: ', n_chunk
+	print ''  # blank line
+
+	# Calculate PSDs for each chunk
+	if plotting:
+		plt.figure(4)
+	num_PSDs = 0
+	psds = []
+	strain_seg = strain[seglist[seg_index]]
+	my_window = mlab.window_hanning(np.ones(chunk_length))
+	for i_PSD in range(n_chunk):
+		i_start = int(i_PSD * (chunk_length/2))
+		i_end = int(i_start + chunk_length - 1)
+		pxx, freqs = mlab.psd(
+			strain_seg[i_start:i_end], Fs=fs, NFFT=chunk_length, 
+			noverlap=chunk_length/2, window=my_window)
+		if plotting:
+			plt.loglog(freqs, np.sqrt(np.fabs(pxx)))		
+		num_PSDs += 1
+		
+		# Store list of tuples for PSD values
+		psds.append((freqs, np.fabs(pxx)))
+	print '* Finished processing all chunks'	
+	print '* Number of PSDs plotted: ', num_PSDs 
+	print ''  # blank line
+
+
+	psds_dict = {}
+	for psd in psds:
+		# Loop over all frequencies for a given PSD array
+		for index, freq in enumerate(psd[0]):
+			# If the frequency is not in dictionary, add to keys
+			if freq not in psds_dict.keys():
+				psds_dict[freq] = [psd[1][index]]
+				
+			# Append new PSD value if frequency already in dict
+			else:
+				psds_dict[freq].append(psd[1][index])
+
+
+	if plotting:
+		plt.grid('on')
+		plt.xlabel('Frequency (Hz)')
+		plt.ylabel('PSD (strain /  Sqrt(Hz))')
+		plt.title(
+			str(num_PSDs) + ' PSDs for L1 data starting at GPS ' + 
+			str(time_seg[0]))
+		plt.ylim([1e-26, 1e-16])
+		#plt.savefig('manyPSDs.png')
+
+	return psds_dict	
+
+
+def plot_psd(time_seg, strain_seg, fs, chunk_length, window, plotting=False):
 	
 	"""
 	Creates a power spectral density plot for a set of strain values
@@ -227,106 +281,63 @@ for chunk_index in range(10):
 	print '  This must agree'
 	print ''
 
-print '=== PSD statistics ==='
-seg_index = 0
-print '* Use segment #', seg_index
-time_seg = time[seglist[seg_index]]
-time_seg_max = max(time_seg)
-time_seg_min = min(time_seg)
-segment_length = int((time_seg_max - time_seg_min) * fs)  # number of samples
-print '* Length of the segment: ', time_seg_max - time_seg_min, 'sec =>', segment_length, ' samples'
+# Plot PSDs for 200 data chunks for the first good segment
+psds = plot_many_psds(seglist, 0, time, strain, fs, 200)
 
-chunk_length = 2**12  # number of samples in a chunk
-chunk_length_sec = chunk_length / fs # chunk length in seconds
-print '* Length of one chunk: ', chunk_length_sec, ' sec => ', chunk_length, ' samples'
-
-# User selects desired number of chunks
-n_chunk_request = 200
-print '* Requested number of chunks: ', n_chunk_request 
-
-# Check that segment is of sufficient length
-analyze_length = (chunk_length/2) * (n_chunk_request + 1)
-if analyze_length > segment_length:
-	print '  The requested data length exceeds the length of the segment.'
-	n_chunk_request = int(segment_length/(chunk_length/2) - 1) 
-	print '  Reduced the requested number of chunks: ', n_chunk_request
-print ''  # blank line
-
-# Calculate PSDs for each chunk
-plt.figure(4)
-num_PSDs = 0
-psds = []
-strain_seg = strain[seglist[seg_index]]
-my_window = mlab.window_hanning(np.ones(chunk_length))
-for i_PSD in range(n_chunk_request + 1):
-	i_start = int(i_PSD * (chunk_length/2))
-	i_end = int(i_start + chunk_length - 1)
-	pxx, freqs = mlab.psd(
-		strain_seg[i_start:i_end], Fs=fs, NFFT=chunk_length, 
-		noverlap=chunk_length/2, window=my_window)
-	plt.loglog(freqs, np.sqrt(np.fabs(pxx)))		
-	num_PSDs += 1
-	
-	# Store list of tuples for PSD values
-	psds.append((freqs, np.fabs(pxx)))
-print '* Finished processing all chunks'	
-print '* Number of PSDs plotted: ', num_PSDs 
-
-
-plt.grid('on')
-plt.xlabel('Frequency (Hz)')
-plt.ylabel('PSD (strain /  Sqrt(Hz))')
-plt.title(
-	str(num_PSDs) + ' PSDs for L1 data starting at GPS ' + str(time_seg[0]))
-plt.ylim([1e-26, 1e-16])
-plt.savefig('manyPSDs.pdf')
+# Calculate PSD for maximum number of chunks
+psds_max = plot_many_psds(seglist, 0, time, strain, fs, 5)
 
 
 # Calculate histograms for PSD distribution for many PSDs at different freqs
+print '=== Generating Histograms ==='
 plt.figure(5)
-binwidth = 1e-46
 plot_histogram(100, psds)
 plt.figure(6)
 plot_histogram(500, psds)
 plt.figure(7)
 plot_histogram(1000, psds)
+print '* Finished histogram generation'
+print ''  # blank line
 
+# Calculate P1 and P2 for a smaller data segment
+print '=== Calculating P0, P1, and P2 ==='
+# Create an array of tuples of frequency, c1, and c2 values
+freqs = []
+c1_values = []
+c2_values = []
+for freq in psds_max.keys():
+	# Convert PSD lists to numpy arrays
+	psds_max[freq] = np.asarray(psds_max[freq])
+	psds[freq] = np.asarray(psds[freq])
+
+	# Calculate powers
+	P0 = np.mean(psds_max[freq])
+	P1 = np.mean(psds[freq])
+	P2 = np.mean((psds[freq])**2)	
 	
-'''
-# Plot PSD statistics for every frequency in range
-many_mean = []
-many_std = []
-many_skew = []
-many_kurt = []
-for freq in freqs:
-	mean, var, skewness, kurtosis = get_freq_statistics(freq, psds)
-	many_mean.append(mean)
-	many_std.append(np.sqrt(var))
-	#if mean - 2*std < 0:
-		#print freq, mean, mean - 2*std, std
-many_mean = np.asarray(many_mean)
-many_std = np.asarray(many_std)
-many_skew = np.asarray(many_skew)
-many_kurt = np.asarray(many_kurt)
-plt.figure(4)
-mean = plt.loglog(freqs, many_mean, lw=1, color='red')
-std4 = plt.fill_between(
-	freqs, many_mean, many_mean + 4*many_std, facecolor='yellow')
-std2 = plt.fill_between(freqs, many_mean, many_mean + 2*many_std, facecolor='blue')
-#plt.loglog(freqs, many_mean + 2*many_std, lw=1, color='blue', label='+2 sigma')
-#plt.loglog(freqs, many_mean - 2*many_std, lw=1, color='green', label='-2 sigma')
-plt.grid('on')
-#plt.legend([mean, std4, std2], ['Mean', '4 std', '2std'])
-plt.xlabel('Frequency (Hz)')
-plt.ylabel('PSD (strain / Sqrt(Hz))')
-plt.title('Average of ' + str(num_PSDs) + ' PSDs for L1 data starting at GPS ' + str(time_seg[0])) 
-plt.ylim([1e-26, 1e-16])
-#plt.savefig('psd_statistics.pdf')
+	# Calculate c1 and c2
+	c1_values.append(P1/P0 - 1)
+	c2_values.append(0.5 * (P2 / (P1**2) - 2))
+	freqs.append(freq)
+psd_statistics = np.array(zip(freqs, c1_values, c2_values), dtype=[
+	('freq', float),('c1', float),('c2', float)])
+print '* Finished calculating PSD statistics'
 
-# Display histogram for a chosen frequency (in Hz as first parameter)
-plot_histogram(500, psds)
-print get_freq_statistics(freq, psds)
-'''	
+# Plot c1 and c2 for various frequencies
+plt.figure(8)
+c1_plot = plt.subplot(211)
+plt.plot(psd_statistics['freq'], psd_statistics['c1'], label='c1')
+plt.title(r'$c_{1}$ and $c_{2}$ values for L1 data starting at GPS ' + str(time_seg[0]))
+plt.legend()
+plt.ylabel(r'$c_{1}$')
+c1_plot.set_xscale('log')
+
+c2_plot = plt.subplot(212, sharex=c1_plot)
+plt.plot(psd_statistics['freq'], psd_statistics['c2'], label='c2')
+plt.legend()
+plt.ylabel(r'$c_{2}$')
+plt.xlabel('Frequency (Hz)')
+plt.savefig('Gaussianity.pdf')
 
 plt.show()
 
