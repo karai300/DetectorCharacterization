@@ -25,8 +25,9 @@ def plot_histogram(freq_selected, psds):
 	# Plot histogram
 	#plt.figure(5)
 	plt.hist(psd_h, 50, label=str(freq_selected) + 'Hz', log=True)
-	plt.xlabel('PSD (strain^2 / Hz)')
-	plt.ylabel('Count')
+	plt.tick_params(axis='x', labelsize=14)
+	plt.xlabel(r'PSD (strain$^{2}$ / Hz)', fontsize=18)
+	plt.ylabel('Count', fontsize=18)
 	plt.legend()
 	plt.savefig('histogram' + str(freq_selected) + '.png')
 	
@@ -47,8 +48,8 @@ def plot_timeseries(time_seg, strain_seg):
 	plt.plot(time_seg - time_seg[0], strain_seg)
 	plt.xlabel('Time since GPS ' + str(time_seg[0]) + ' (s)')
 	plt.ylabel('Strain')
-	plt.title('Time Series')
-	#plt.savefig('timeseries.pdf')
+	plt.title('Time Series of L1 data')
+	plt.savefig('timeseries.pdf')
 	
 
 
@@ -195,7 +196,7 @@ def plot_psd(time_seg, strain_seg, fs, chunk_length, window, plotting=False):
 		plt.loglog(freqs, np.sqrt(pxx))
 		plt.grid('on')
 		plt.xlabel('Frequency (Hz)')
-		plt.ylabel('PSD (strain /  Sqrt(Hz))')
+		plt.ylabel(r'PSD (strain /  $\sqrt{Hz}$)')
 		plt.title('PSD for L1 data starting at GPS ' + str(time_seg[0]))
 		plt.ylim([1e-26, 1e-16])
 		#plt.savefig('original_PSD.pdf')
@@ -252,15 +253,19 @@ for chunk_index in range(10):
 	print '* Extracted chunk length: ', len(time_chunk)
 	print ''  # blank line
 
+	plotting = False
 	# Plot a time series
-	#plot_timeseries(time_seg, strain_seg)
-
+	#if chunk_index == 0:
+	#	plot_timeseries(time_chunk, strain_chunk)
+	#	plotting = True
+	
 	# Calculate a PSD
 	my_window = mlab.window_hanning(np.ones(chunk_length))
 	#pxx, freqs = mlab.psd(strain_chunk, Fs=fs, NFFT=chunk_length, 
 			      #noverlap=chunk_length/2, window=my_window)
+
 	pxx, freqs = plot_psd(time_chunk, strain_chunk, fs, chunk_length, 
-			      my_window, False)
+			      my_window, plotting)
 	
 	f_resolution = freqs[1] - freqs[0]
 	print '* Frequency resolution returned by mlab.psd: ', f_resolution,'Hz'
@@ -283,15 +288,15 @@ for chunk_index in range(10):
 psds = plot_many_psds(seglist, 0, time, strain, fs, 200)
 
 # Calculate PSD for maximum number of chunks
-psds_max = plot_many_psds(seglist, 0, time, strain, fs, 600)
+psds_max = plot_many_psds(seglist, 0, time, strain, fs, 6000)
 
 
 # Calculate histograms for PSD distribution for many PSDs at different freqs
 print '=== Generating Histograms ==='
-plt.figure(5)
-plot_histogram(100, psds)
-plt.figure(6)
-plot_histogram(500, psds)
+#plt.figure(5)
+#plot_histogram(100, psds)
+#plt.figure(6)
+#plot_histogram(500, psds)
 plt.figure(7)
 plot_histogram(1000, psds)
 print '* Finished histogram generation'
@@ -304,6 +309,10 @@ freqs = []
 c1_values = []
 c2_values = []
 pxx_avg = []
+min20 = 0
+min20_freq = 0
+max30 = 0
+max30_freq = 0
 for freq in psds_max.keys():
 	# Convert PSD lists to numpy arrays
 	psds_max[freq] = np.asarray(psds_max[freq])
@@ -319,47 +328,81 @@ for freq in psds_max.keys():
 	c1_values.append(P1/P0 - 1)
 	c2_values.append(0.5 * (P2 / (P1**2) - 2))
 	freqs.append(freq)
+
+	# Print c2 values for interesting frequencies: peaks around 22 and 31
+	if freq >= 20 and freq <= 30:
+		c2 =  (0.5 * (P2 / (P1**2) - 2))
+		if c2 < min20:
+			min20 = c2
+			min20_freq = freq
+	elif freq >= 30 and freq <= 40:
+		c2 =  (0.5 * (P2 / (P1**2) - 2))
+		if c2 > max30:
+			max30 = c2
+			max30_freq = freq
+
+print '* c2 at ', min20_freq, 'Hz: ', min20
+print '* c2 at ', max30_freq, 'Hz: ', max30
+	
+		
+
 psd_statistics = np.array(zip(freqs, c1_values, c2_values, pxx_avg), dtype=[
 	('freq', float),('c1', float),('c2', float), ('pxx_avg', float)])
 print '* Finished calculating PSD statistics'
 
 # Plot Pxx, c1, and c2 for various frequencies
 plt.figure(8)
-P_plot = plt.subplot(311)
+P_plot = plt.subplot2grid((5,1), (0,0), rowspan=3)
+P_plot.set_yticks(P_plot.get_yticks()[1:])
+plt.setp(P_plot.get_xticklabels(), visible=False)
 plt.loglog(psd_statistics['freq'], psd_statistics['pxx_avg'])
 plt.title(r'PSD, $c_{1}$, and $c_{2}$ values for L1 data starting at GPS ' + str(time_seg[0]))
 plt.ylabel(r'<PSD> (strain / $\sqrt{Hz}$)')
 P_plot.set_xscale('log')
+plt.grid('on')
+	
 
-
-c1_plot = plt.subplot(312, sharex=P_plot)
+c1_plot = plt.subplot2grid((5,1), (3,0), sharex=P_plot)
 plt.plot(psd_statistics['freq'], psd_statistics['c1'], label='c1')
 #plt.title(r'$c_{1}$ and $c_{2}$ values for L1 data starting at GPS ' + str(time_seg[0]))
 plt.legend()
 plt.ylabel(r'$c_{1}$')
-
-c2_plot = plt.subplot(313, sharex=P_plot)
+c1_plot.set_yticks(c1_plot.get_yticks()[1:])
+plt.setp(c1_plot.get_xticklabels(), visible=False)
+c1_plot.set_yticks(c1_plot.get_yticks()[::2])
+plt.grid('on')
+		
+c2_plot = plt.subplot2grid((5,1), (4,0), sharex=P_plot)
 plt.plot(psd_statistics['freq'], psd_statistics['c2'], label='c2')
 plt.legend()
 plt.ylabel(r'$c_{2}$')
 plt.xlabel('Frequency (Hz)')
+c2_plot.set_yticks(c2_plot.get_yticks()[::2])
+plt.grid('on')
 plt.savefig('Gaussianity.pdf')
 
+	
 # Plot Pxx and c2 for various frequencies
 plt.figure(9)
-P_plot = plt.subplot(211)
+P_plot = plt.subplot2grid((4,1), (0,0), rowspan=3)
 plt.loglog(psd_statistics['freq'], psd_statistics['pxx_avg'])
 plt.title(r'PSD and $c_{2}$ values for L1 data starting at GPS ' + str(time_seg[0]))
 plt.ylabel(r'<PSD> (strain / $\sqrt{Hz}$)')
 P_plot.set_xscale('log')
-
-c2_plot = plt.subplot(212, sharex=P_plot)
+P_plot.set_yticks(P_plot.get_yticks()[1:])
+plt.setp(P_plot.get_xticklabels(), visible=False)
+plt.grid('on')
+		
+c2_plot = plt.subplot2grid((4,1), (3,0), sharex=P_plot)
 plt.plot(psd_statistics['freq'], psd_statistics['c2'], label='c2')
 plt.legend()
-plt.ylabel(r'$c_{2}$')
+#plt.ylabel(r'$c_{2}$')
 plt.xlabel('Frequency (Hz)')
+c2_plot.set_yticks(c2_plot.get_yticks()[::2])
+plt.grid('on')
 plt.savefig('Gaussianity_noc1.pdf')
 
+	
 # Plot histograms for interesting frequencies
 ''' 
 # THIS CRASHED MY COMPUTER
@@ -371,16 +414,11 @@ for index, freq in enumerate(psd_statistics['freq']):
 		plot_histogram(freq, psds)
 '''
 plt.figure(10)
-plot_histogram(20, psds_max)
-plt.figure(11)
-plot_histogram(22, psds_max)
+plot_histogram(23, psds_max)
 plt.figure(12)
-plot_histogram(31, psds_max)
+plot_histogram(33, psds_max)
 plt.figure(13)
 plot_histogram(60, psds_max)
-plt.figure(14)
-plot_histogram(23, psds_max)
-
 
 
 plt.show()
