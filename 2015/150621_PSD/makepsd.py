@@ -26,9 +26,10 @@ def plot_histogram(freq_selected, psds):
 	#plt.figure(5)
 	plt.hist(psd_h, 50, label=str(freq_selected) + 'Hz', log=True)
 	plt.tick_params(axis='x', labelsize=14)
+	plt.tick_params(axis='y', labelsize=14)
 	plt.xlabel(r'PSD (strain$^{2}$ / Hz)', fontsize=18)
 	plt.ylabel('Count', fontsize=18)
-	plt.legend()
+	plt.legend(fontsize=16)
 	plt.savefig('histogram' + str(freq_selected) + '.png')
 	
 
@@ -46,8 +47,10 @@ def plot_timeseries(time_seg, strain_seg):
 
 	plt.figure(1)
 	plt.plot(time_seg - time_seg[0], strain_seg)
-	plt.xlabel('Time since GPS ' + str(time_seg[0]) + ' (s)')
-	plt.ylabel('Strain')
+	plt.xlabel('Time since GPS ' + str(time_seg[0]) + ' (s)', fontsize=18)
+	plt.ylabel('Strain', fontsize=18)
+	plt.tick_params(axis='x', labelsize=14)
+	plt.tick_params(axis='y', labelsize=14)
 	plt.title('Time Series of L1 data')
 	plt.savefig('timeseries.pdf')
 	
@@ -144,13 +147,16 @@ def plot_many_psds(
 
 	if plotting:
 		plt.grid('on')
-		plt.xlabel('Frequency (Hz)')
-		plt.ylabel('PSD (strain /  Sqrt(Hz))')
+		plt.xlim([10,100])
+		plt.xlabel('Frequency (Hz)', fontsize=18)
+		plt.ylabel(r'PSD (strain /  $\sqrt{Hz}$)', fontsize=18)
+		plt.tick_params(axis='x', labelsize=14)
+		plt.tick_params(axis='y', labelsize=14)
 		plt.title(
 			str(num_PSDs) + ' PSDs for L1 data starting at GPS ' + 
 			str(time_seg[0]))
 		plt.ylim([1e-26, 1e-16])
-		#plt.savefig('manyPSDs.png')
+		plt.savefig('manyPSDs_zoomed.png')
 
 	return psds_dict	
 
@@ -195,11 +201,14 @@ def plot_psd(time_seg, strain_seg, fs, chunk_length, window, plotting=False):
 		plt.figure(2)	
 		plt.loglog(freqs, np.sqrt(pxx))
 		plt.grid('on')
-		plt.xlabel('Frequency (Hz)')
-		plt.ylabel(r'PSD (strain /  $\sqrt{Hz}$)')
+		plt.tick_params(axis='x', labelsize=14)
+		plt.tick_params(axis='y', labelsize=14)
+		plt.xlabel('Frequency (Hz)', fontsize=18)
+		plt.ylabel(r'PSD (strain /  $\sqrt{Hz}$)', fontsize=18)
 		plt.title('PSD for L1 data starting at GPS ' + str(time_seg[0]))
+		plt.xlim([1, np.max(freqs)])
 		plt.ylim([1e-26, 1e-16])
-		#plt.savefig('original_PSD.pdf')
+		plt.savefig('original_PSD.pdf')
 	return pxx, freqs
 
 
@@ -255,9 +264,9 @@ for chunk_index in range(10):
 
 	plotting = False
 	# Plot a time series
-	#if chunk_index == 0:
-	#	plot_timeseries(time_chunk, strain_chunk)
-	#	plotting = True
+	if chunk_index == 1:
+		plot_timeseries(time_chunk, strain_chunk)
+		#plotting = True
 	
 	# Calculate a PSD
 	my_window = mlab.window_hanning(np.ones(chunk_length))
@@ -284,8 +293,17 @@ for chunk_index in range(10):
 	print '  This must agree'
 	print ''
 
+# Plot PSD for 1 data chunk
+strain_chunk = strain[seglist[seg_index]]
+time_chunk = time[seglist[seg_index]]
+
+my_window = mlab.window_hanning(np.ones(chunk_length))
+pxx, freqs = plot_psd(time_chunk, strain_chunk, fs, chunk_length, 
+		      my_window, True)
+
+
 # Plot PSDs for 200 data chunks for the first good segment
-psds = plot_many_psds(seglist, 0, time, strain, fs, 200)
+psds = plot_many_psds(seglist, 0, time, strain, fs, 200, True)
 
 # Calculate PSD for maximum number of chunks
 psds_max = plot_many_psds(seglist, 0, time, strain, fs, 6000)
@@ -366,7 +384,7 @@ c1_plot = plt.subplot2grid((5,1), (3,0), sharex=P_plot)
 plt.plot(psd_statistics['freq'], psd_statistics['c1'], label='c1')
 #plt.title(r'$c_{1}$ and $c_{2}$ values for L1 data starting at GPS ' + str(time_seg[0]))
 plt.legend()
-plt.ylabel(r'$c_{1}$')
+#plt.ylabel(r'$c_{1}$')
 c1_plot.set_yticks(c1_plot.get_yticks()[1:])
 plt.setp(c1_plot.get_xticklabels(), visible=False)
 c1_plot.set_yticks(c1_plot.get_yticks()[::2])
@@ -375,7 +393,7 @@ plt.grid('on')
 c2_plot = plt.subplot2grid((5,1), (4,0), sharex=P_plot)
 plt.plot(psd_statistics['freq'], psd_statistics['c2'], label='c2')
 plt.legend()
-plt.ylabel(r'$c_{2}$')
+#plt.ylabel(r'$c_{2}$')
 plt.xlabel('Frequency (Hz)')
 c2_plot.set_yticks(c2_plot.get_yticks()[::2])
 plt.grid('on')
